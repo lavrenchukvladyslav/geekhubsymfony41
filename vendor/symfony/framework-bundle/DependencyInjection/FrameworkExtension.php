@@ -69,6 +69,7 @@ use Symfony\Component\Messenger\Transport\TransportInterface;
 use Symfony\Component\PropertyAccess\PropertyAccessor;
 use Symfony\Component\PropertyInfo\PropertyAccessExtractorInterface;
 use Symfony\Component\PropertyInfo\PropertyDescriptionExtractorInterface;
+use Symfony\Component\PropertyInfo\PropertyInfoExtractorInterface;
 use Symfony\Component\PropertyInfo\PropertyListExtractorInterface;
 use Symfony\Component\PropertyInfo\PropertyTypeExtractorInterface;
 use Symfony\Component\Routing\Loader\AnnotationDirectoryLoader;
@@ -108,6 +109,7 @@ class FrameworkExtension extends Extension
     private $sessionConfigEnabled = false;
     private $annotationsConfigEnabled = false;
     private $validatorConfigEnabled = false;
+    private $messengerConfigEnabled = false;
 
     /**
      * Responds to the app.config configuration parameter.
@@ -262,14 +264,14 @@ class FrameworkExtension extends Extension
         }
 
         if ($this->isConfigEnabled($container, $config['property_info'])) {
-            $this->registerPropertyInfoConfiguration($config['property_info'], $container, $loader);
+            $this->registerPropertyInfoConfiguration($container, $loader);
         }
 
         if ($this->isConfigEnabled($container, $config['lock'])) {
             $this->registerLockConfiguration($config['lock'], $container, $loader);
         }
 
-        if ($this->isConfigEnabled($container, $config['messenger'])) {
+        if ($this->messengerConfigEnabled = $this->isConfigEnabled($container, $config['messenger'])) {
             $this->registerMessengerConfiguration($config['messenger'], $container, $loader, $config['serializer'], $config['validation']);
         } else {
             $container->removeDefinition('console.command.messenger_consume_messages');
@@ -443,6 +445,10 @@ class FrameworkExtension extends Extension
             $loader->load('translation_debug.xml');
 
             $container->getDefinition('translator.data_collector')->setDecoratedService('translator');
+        }
+
+        if ($this->messengerConfigEnabled) {
+            $loader->load('messenger_debug.xml');
         }
 
         $container->setParameter('profiler_listener.only_exceptions', $config['only_exceptions']);
@@ -1347,8 +1353,12 @@ class FrameworkExtension extends Extension
         }
     }
 
-    private function registerPropertyInfoConfiguration(array $config, ContainerBuilder $container, XmlFileLoader $loader)
+    private function registerPropertyInfoConfiguration(ContainerBuilder $container, XmlFileLoader $loader)
     {
+        if (!interface_exists(PropertyInfoExtractorInterface::class)) {
+            throw new LogicException('PropertyInfo support cannot be enabled as the PropertyInfo component is not installed. Try running "composer require symfony/property-info".');
+        }
+
         $loader->load('property_info.xml');
 
         if (interface_exists('phpDocumentor\Reflection\DocBlockFactoryInterface')) {
